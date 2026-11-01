@@ -83,8 +83,9 @@ app.get("/task/:id", async (req, res) => {
       const result = await freelancerCollection.find().toArray();
 
       res.send(result);
+      
     });
-    
+
 
 
 
