@@ -106,6 +106,20 @@ app.get("/task/:id", async (req, res) => {
 });
 
 
+// task post api 
+app.post("/task", async (req, res) => {
+  const task = req.body;
+
+  const newTask = {
+    ...task,
+    status: "open",
+  };
+
+  const result = await taskCollection.insertOne(newTask);
+
+  res.send(result);
+});
+
 
  
 
