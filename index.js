@@ -121,6 +121,58 @@ app.post("/task", async (req, res) => {
 });
 
 
+// client based tasks
+app.get("/client-tasks/:userId", async (req, res) => {
+  const userId = req.params.userId;
+
+  const result = await taskCollection
+    .find({ client_id: userId })
+    .toArray();
+
+  res.send(result);
+});
+
+
+// edit task api
+
+app.patch("/task/:id", async (req, res) => {
+  const { id } = req.params;
+  const { title, category, budget, deadline, details } = req.body;
+
+  const updateData = {
+    title,
+    category,
+    budget,
+    deadline,
+    details,
+  };
+
+  const result = await taskCollection.updateOne(
+    {
+      _id: new ObjectId(id),
+      status: "open",
+    },
+    {
+      $set: updateData,
+    }
+  );
+
+  res.send(result);
+});
+
+
+// Delete Task API
+
+app.delete("/task/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const result = await taskCollection.deleteOne({
+    _id: new ObjectId(id),
+  });
+
+  res.send(result);
+});
+
  
 
   } catch (error) {
