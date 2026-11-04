@@ -198,7 +198,20 @@ app.patch("/task/:id/apply", async (req, res) => {
 });
 
 
+// my proposal task
+app.get("/my-proposals/:userId", async (req, res) => {
+  const { userId } = req.params;
 
+  const result = await taskCollection
+    .find({
+      status: "in-process",
+      applied_freelancers: userId,
+    })
+    .toArray();
+     console.log("Found Tasks:", result.length);
+
+  res.send(result);
+});
  
 
   } catch (error) {
