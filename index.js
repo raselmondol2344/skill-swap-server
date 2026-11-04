@@ -175,6 +175,30 @@ app.delete("/task/:id", async (req, res) => {
   res.send(result);
 });
 
+
+
+//  apply for task
+app.patch("/task/:id/apply", async (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body;
+
+  const result = await taskCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $push: {
+        applied_freelancers: userId,
+      },
+      $set: {
+        status: "in-process",
+      },
+    }
+  );
+
+  res.send(result);
+});
+
+
+
  
 
   } catch (error) {
