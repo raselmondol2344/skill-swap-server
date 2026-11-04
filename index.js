@@ -212,6 +212,53 @@ app.get("/my-proposals/:userId", async (req, res) => {
 
   res.send(result);
 });
+
+
+// Manage proposals
+app.get("/manage-proposals/:clientId", async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    const result = await taskCollection
+      .find({
+        client_id: clientId,
+        status: "in-process",
+      })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: "Failed to fetch proposals" });
+  }
+});
+
+
+//reject btn 
+
+app.patch("/task/:id/reject", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { freelancerId } = req.body;
+
+    const result = await taskCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+      },
+      {
+        $pull: {
+          applied_freelancers: freelancerId,
+        },
+      }
+    );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to reject proposal",
+    });
+  }
+});
+
  
 
   } catch (error) {
