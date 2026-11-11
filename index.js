@@ -259,6 +259,29 @@ app.patch("/task/:id/reject", async (req, res) => {
   }
 });
 
+//active task 
+
+
+      app.get("/freelancer/active-projects/:userId", async (req, res) => {
+        try {
+          const { userId } = req.params;
+
+          const result = await taskCollection
+            .find({
+              applied_freelancers: userId,
+              status: { $in: ["in-process", "completed"] },
+            })
+            .toArray();
+
+          res.send(result);
+        } catch (error) {
+          res.status(500).send({
+            message: "Failed to fetch active projects",
+          });
+        }
+      });
+
+
  
 
   } catch (error) {
