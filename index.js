@@ -480,9 +480,7 @@ app.delete("/user/:id", async (req, res) => {
 // Get All Tasks
 app.get("/tasks", async (req, res) => {
   try {
-    const result = await client
-      .db("Skill-Swap")
-      .collection("task")
+    const result = await taskCollection
       .find()
       .sort({ _id: -1 })
       .toArray();
@@ -500,12 +498,9 @@ app.delete("/task/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await client
-      .db("Skill-Swap")
-      .collection("task")
-      .deleteOne({
-        _id: new ObjectId(id),
-      });
+    const result = await taskCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
 
     if (result.deletedCount === 0) {
       return res.status(404).send({
@@ -520,10 +515,9 @@ app.delete("/task/:id", async (req, res) => {
     res.status(500).send({
       message: "Failed to delete task",
     });
-  }
+
+    }
 });
-
-
 
 
 
