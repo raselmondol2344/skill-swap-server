@@ -25,6 +25,7 @@ async function connectToMongoDB() {
     const db = client.db("skill-swap");
     const taskCollection = db.collection("task");
     const freelancerCollection = db.collection("freelancer")
+    const userCollection = db.collection("user");
 
     console.log("✅ Database selected:", db.databaseName);
 
@@ -387,6 +388,94 @@ app.get("/freelancer-overview/:freelancerId", async (req, res) => {
     });
   }
 });
+
+
+// admin over view
+app.get("/admin-overview", async (req, res) => {
+  try {
+    // Total Users
+    const users = await userCollection.find().toArray();
+
+    // Total Tasks
+    const tasks = await taskCollection.find().toArray();
+
+    // Total Revenue
+    const totalRevenue = tasks.reduce(
+      (total, task) => total + Number(task.budget || 0),
+      0
+    );
+
+    // Active Tasks
+    const activeTasks = await taskCollection
+      .find({
+        status: { $in: ["open", "in-process"] },
+      })
+      .toArray();
+
+    res.send({
+      totalUsers: users.length,
+      totalTasks: tasks.length,
+      totalRevenue,
+      activeTasks: activeTasks.length,
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to load admin overview",
+      error: error.message,
+    });
+  }
+});
+
+
+
+//user api admin 
+app.get("/users", async (req, res) => {
+  try {
+    const users = await userCollection
+      .find()
+      .project({
+        name: 1,
+        email: 1,
+        role: 1,
+      })
+      .toArray();
+
+    res.send(users);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to load users",
+    });
+  }
+});
+
+
+//user delete from admin
+
+app.delete("/user/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await userCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        message: "User not found",
+      });
+    }
+
+    res.send({
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to delete user",
+    });
+  }
+});
+
+
 
 
 
