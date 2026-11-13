@@ -477,6 +477,52 @@ app.delete("/user/:id", async (req, res) => {
 
 
 
+// Get All Tasks
+app.get("/tasks", async (req, res) => {
+  try {
+    const result = await client
+      .db("Skill-Swap")
+      .collection("task")
+      .find()
+      .sort({ _id: -1 })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch tasks",
+    });
+  }
+});
+
+// Delete Task
+app.delete("/task/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await client
+      .db("Skill-Swap")
+      .collection("task")
+      .deleteOne({
+        _id: new ObjectId(id),
+      });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        message: "Task not found",
+      });
+    }
+
+    res.send({
+      message: "Task deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to delete task",
+    });
+  }
+});
+
 
 
 
