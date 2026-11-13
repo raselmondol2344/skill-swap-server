@@ -339,6 +339,59 @@ app.get("/client-overview/:clientId", async (req, res) => {
 });
 
 
+
+//freelancer overview
+
+
+app.get("/freelancer-overview/:freelancerId", async (req, res) => {
+  try {
+    const { freelancerId } = req.params;
+
+    // Total Proposals
+    const proposals = await taskCollection
+      .find({ applied_freelancers: freelancerId })
+      .toArray();
+
+    // In Progress Tasks
+    const inProgressTasks = await taskCollection
+      .find({
+        status: "in-process",
+        applied_freelancers: freelancerId,
+      })
+      .toArray();
+
+    // Completed Tasks
+    const completedTasks = await taskCollection
+      .find({
+        status: "completed",
+        paid_freelancer: freelancerId,
+      })
+      .toArray();
+
+    // Total Earnings
+    const totalEarnings = completedTasks.reduce(
+      (total, task) => total + Number(task.budget || 0),
+      0
+    );
+
+    res.send({
+      totalProposals: proposals.length,
+      inProgressTasks: inProgressTasks.length,
+      completedTasks: completedTasks.length,
+      totalEarnings,
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to load freelancer overview",
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+
  
 
   } catch (error) {
