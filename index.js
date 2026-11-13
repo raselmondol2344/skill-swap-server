@@ -282,6 +282,63 @@ app.patch("/task/:id/reject", async (req, res) => {
       });
 
 
+
+
+      // client over view 
+      
+app.get("/client-overview/:clientId", async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    // Find all tasks of this client
+    const tasks = await taskCollection.find({
+      client_id: clientId
+    }).toArray();
+
+    // Total tasks
+    const totalTasks = tasks.length;
+
+    // Open tasks
+    const openTasks = tasks.filter(
+      task => task.status === "open"
+    ).length;
+
+    // In-process tasks
+    const inProcessTasks = tasks.filter(
+      task => task.status === "in-process"
+    ).length;
+
+    // Completed tasks
+    const completedTasks = tasks.filter(
+      task => task.status === "completed"
+    ).length;
+
+    // Total spent from completed tasks
+    const totalSpent = tasks
+      .filter(task => task.status === "completed")
+      .reduce(
+        (total, task) => total + Number(task.budget || 0),
+        0
+      );
+
+    // Send response
+    res.send({
+     totalTasks,
+  openTasks,
+  inProcessTasks,
+  completedTasks,
+  totalSpent
+    });
+
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to load client overview",
+      error: error.message
+    });
+  }
+});
+
+
  
 
   } catch (error) {
