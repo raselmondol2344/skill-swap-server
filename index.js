@@ -36,11 +36,27 @@ async function connectToMongoDB() {
 
 
     //all task
-app.get("/task", async (req, res) => {
-  const result = await taskCollection.find().toArray();
 
-  res.send(result);
+app.get("/task", async (req, res) => {
+  const limit = Number(req.query.limit) || 8;
+  const page = Number(req.query.page) || 1;
+
+  const total_data = await taskCollection.countDocuments();
+  const total_page = Math.ceil(total_data / limit);
+
+  const skip = (page - 1) * limit;
+
+  const data = await taskCollection
+    .find()
+    .skip(skip)
+    .limit(limit)
+    .toArray();
+
+  res.send({ total_page, skip, page, data });
 });
+
+
+
 
 
 // High price 8 tasks
