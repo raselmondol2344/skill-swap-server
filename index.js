@@ -37,30 +37,34 @@ async function connectToMongoDB() {
 
     //all task
 
+// All Tasks with Category Filter and Search
 app.get("/task", async (req, res) => {
   const limit = Number(req.query.limit) || 8;
   const page = Number(req.query.page) || 1;
 
-  const total_data = await taskCollection.countDocuments();
+  const searchText = req.query.search || "";
+  const category = req.query.category || "";
+
+  // Filter query
+  let query = {};
+
+  // Category filter
+  if (category && category !== "all") {
+    query.category = category;
+  }
+
+  // Search filter
+  if (searchText) {
+    query.$or = [
+      { title: { $regex: searchText, $options: "i" } },
+      { details: { $regex: searchText, $options: "i" } },
+      { category: { $regex: searchText, $options: "i" } },
+    ];
+  }
+
+  const total_data = await taskCollection.countDocuments(query);
   const total_page = Math.ceil(total_data / limit);
-
   const skip = (page - 1) * limit;
-
-
-  // serching funconality
-  const serchText = req.query.search || ""
-      let query ={}
-
-      query.$or =[
-        {title: {$regex: serchText, $options: "i"}},
-        {details: {$regex: serchText, $options: "i"}},
-        {category: {$regex: serchText, $options: "i"}},
-
-      ]
-
-
-
-
 
   const data = await taskCollection
     .find(query)
@@ -70,7 +74,6 @@ app.get("/task", async (req, res) => {
 
   res.send({ total_page, skip, page, data });
 });
-
 
 
 
