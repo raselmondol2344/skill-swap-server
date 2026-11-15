@@ -46,8 +46,24 @@ app.get("/task", async (req, res) => {
 
   const skip = (page - 1) * limit;
 
+
+  // serching funconality
+  const serchText = req.query.search || ""
+      let query ={}
+
+      query.$or =[
+        {title: {$regex: serchText, $options: "i"}},
+        {details: {$regex: serchText, $options: "i"}},
+        {category: {$regex: serchText, $options: "i"}},
+
+      ]
+
+
+
+
+
   const data = await taskCollection
-    .find()
+    .find(query)
     .skip(skip)
     .limit(limit)
     .toArray();
@@ -97,6 +113,14 @@ app.get("/task/:id", async (req, res) => {
 
     // All freelancer get API
     app.get("/freelancer", async (req, res) => {
+    
+     
+
+
+
+
+
+
       const result = await freelancerCollection.find().toArray();
 
       res.send(result);
