@@ -2,6 +2,8 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
+const { createRemoteJWKSet } = require("jose");
+const { jwtVerify } = require("jose-cjs");
 
 dotenv.config();
 
@@ -13,6 +15,7 @@ app.use(express.json());
 const port = process.env.PORT;
 
 const client = new MongoClient(process.env.MONGODB_URI);
+
 
 
 // MongoDB Connect
@@ -35,10 +38,36 @@ async function connectToMongoDB() {
     // =========================
 
 
+    // JWT 
+    //install npm i react jose-cjs
+    const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`))
+
+    const  verifyToken = async (req,res,next)=>{
+      const authHeader = req.headers.authorization
+
+      if(!authHeader || !authHeader.startWith("Bearer")){
+        res.status(401).send({msg: "Unauthorized"})
+      }
+
+      const token = authHeader.split(" ")[1]
+      if(!token){
+        res.status(401).send({msg:"Unauthorized"})
+      }
+
+      try{
+        const{payload}=await jwtVerify(token,JWKS);
+        next();
+      }
+      catch(error){
+        res.status(401).send({msg: "Unauthorized"})
+
+      }
+    }
+
     //all task
 
 // All Tasks with Category Filter and Search
-app.get("/task", async (req, res) => {
+app.get("/task",verifyToken, async (req, res) => {
   const limit = Number(req.query.limit) || 8;
   const page = Number(req.query.page) || 1;
 
