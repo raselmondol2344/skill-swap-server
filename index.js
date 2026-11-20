@@ -30,7 +30,7 @@ async function connectToMongoDB() {
     const freelancerCollection = db.collection("freelancer")
     const userCollection = db.collection("user");
 
-    console.log("✅ Database selected:", db.databaseName);
+   // console.log("✅ Database selected:", db.databaseName);
 
 
     // =========================
@@ -40,34 +40,46 @@ async function connectToMongoDB() {
 
     // JWT 
     //install npm i react jose-cjs
-    const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`))
+    const JWKS = createRemoteJWKSet(
+  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+);
 
-    const  verifyToken = async (req,res,next)=>{
-      const authHeader = req.headers.authorization
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
 
-      if(!authHeader || !authHeader.startWith("Bearer")){
-        res.status(401).send({msg: "Unauthorized"})
-      }
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).send({
+      msg: "Unauthorized",
+    });
+  }
 
-      const token = authHeader.split(" ")[1]
-      if(!token){
-        res.status(401).send({msg:"Unauthorized"})
-      }
+  const token = authHeader.split(" ")[1];
 
-      try{
-        const{payload}=await jwtVerify(token,JWKS);
-        next();
-      }
-      catch(error){
-        res.status(401).send({msg: "Unauthorized"})
+  if (!token) {
+    return res.status(401).send({
+      msg: "Unauthorized",
+    });
+  }
 
-      }
-    }
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+
+    req.user = payload;
+
+    next();
+  } catch (error) {
+    console.log(error);
+
+    return res.status(401).send({
+      msg: "Unauthorized",
+    });
+  }
+};
 
     //all task
 
 // All Tasks with Category Filter and Search
-app.get("/task",verifyToken, async (req, res) => {
+app.get("/task", async (req, res) => {
   const limit = Number(req.query.limit) || 8;
   const page = Number(req.query.page) || 1;
 
@@ -108,28 +120,60 @@ app.get("/task",verifyToken, async (req, res) => {
 
 
 // High price 8 tasks
+// app.get("/task/high-price", async (req, res) => {
+//   const result = await taskCollection
+//     .aggregate([
+//       {
+//         $addFields: {
+//           budgetNumber: {
+//             $toDouble: "$budget",
+//           },
+//         },
+//       },
+//       {
+//         $sort: {
+//           budgetNumber: -1,
+//         },
+//       },
+//       {
+//         $limit: 8,
+//       },
+//     ])
+//     .toArray();
+
+//   res.send(result);
+// });
 app.get("/task/high-price", async (req, res) => {
-  const result = await taskCollection
-    .aggregate([
-      {
-        $addFields: {
-          budgetNumber: {
-            $toDouble: "$budget",
+  try {
+    const result = await taskCollection
+      .aggregate([
+        {
+          $addFields: {
+            budgetNumber: {
+              $toDouble: "$budget",
+            },
           },
         },
-      },
-      {
-        $sort: {
-          budgetNumber: -1,
+        {
+          $sort: {
+            budgetNumber: -1,
+          },
         },
-      },
-      {
-        $limit: 8,
-      },
-    ])
-    .toArray();
+        {
+          $limit: 8,
+        },
+      ])
+      .toArray();
 
-  res.send(result);
+    res.send(result);
+  } catch (error) {
+    console.log("High Price API Error:", error);
+
+    res.status(500).send({
+      message: "Failed to fetch high price tasks",
+      error: error.message,
+    });
+  }
 });
 
 
@@ -143,22 +187,13 @@ app.get("/task/:id", async (req, res) => {
 });
 
 
-    // All freelancer get API
-    app.get("/freelancer", async (req, res) => {
-    
-     
 
+// all freelancer
+   app.get("/freelancer", verifyToken, async (req, res) => {
+  const result = await freelancerCollection.find().toArray();
 
-
-
-
-
-      const result = await freelancerCollection.find().toArray();
-
-      res.send(result);
-
-    });
-    
+  res.send(result);
+});
 
 
 
