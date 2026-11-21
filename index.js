@@ -21,9 +21,9 @@ const client = new MongoClient(process.env.MONGODB_URI);
 // MongoDB Connect
 async function connectToMongoDB() {
   try {
-    await client.connect();
+    //await client.connect();
 
-    console.log("✅ MongoDB connected successfully!");
+   // console.log("✅ MongoDB connected successfully!");
 
     const db = client.db("skill-swap");
     const taskCollection = db.collection("task");
@@ -68,7 +68,7 @@ const verifyToken = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.log(error);
+    //console.log(error);
 
     return res.status(401).send({
       msg: "Unauthorized",
@@ -167,7 +167,7 @@ app.get("/task/high-price", async (req, res) => {
 
     res.send(result);
   } catch (error) {
-    console.log("High Price API Error:", error);
+    //console.log("High Price API Error:", error);
 
     res.status(500).send({
       message: "Failed to fetch high price tasks",
@@ -316,7 +316,7 @@ app.get("/my-proposals/:userId", async (req, res) => {
       applied_freelancers: userId,
     })
     .toArray();
-     console.log("Found Tasks:", result.length);
+    // console.log("Found Tasks:", result.length);
 
   res.send(result);
 });
@@ -645,7 +645,7 @@ app.get("/", (req, res) => {
 
 // Start Server
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+ // console.log(`Example app listening on port ${port}`);
 });
 
 
