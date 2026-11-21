@@ -12,37 +12,38 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const port = process.env.PORT;
+const port = process.env.PORT || 8000;
 
-const client = new MongoClient(process.env.MONGODB_URI);
+// MongoDB Connection
+const uri = process.env.MONGLO_DB_URL;
+if (!uri) {
+  console.warn("⚠️ Warning: MONGLO_DB_URL is not defined in environment variables!");
+}
+const client = new MongoClient(uri || "mongodb://localhost:27017");
 
+const db = client.db("skill-swap");
+const taskCollection = db.collection("task");
+const freelancerCollection = db.collection("freelancer");
+const userCollection = db.collection("user");
 
-
-// MongoDB Connect
 async function connectToMongoDB() {
   try {
-    //await client.connect();
+    await client.connect();
+    console.log("✅ MongoDB connected successfully!");
+  } catch (error) {
+    console.error("❌ MongoDB connection failed:", error.message);
+  }
+}
+connectToMongoDB();
 
-   // console.log("✅ MongoDB connected successfully!");
-
-    const db = client.db("skill-swap");
-    const taskCollection = db.collection("task");
-    const freelancerCollection = db.collection("freelancer")
-    const userCollection = db.collection("user");
-
-   // console.log("✅ Database selected:", db.databaseName);
-
-
-    // =========================
-    // All API Section
-    // =========================
-
-
-    // JWT 
-    //install npm i react jose-cjs
-    const JWKS = createRemoteJWKSet(
-  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
-);
+// JWT Setup
+const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+let JWKS;
+try {
+  JWKS = createRemoteJWKSet(new URL(`${clientUrl}/api/auth/jwks`));
+} catch (error) {
+  console.error("JWKS init error:", error.message);
+}
 
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -62,87 +63,71 @@ const verifyToken = async (req, res, next) => {
   }
 
   try {
+    if (!JWKS) {
+      const activeClientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+      JWKS = createRemoteJWKSet(new URL(`${activeClientUrl}/api/auth/jwks`));
+    }
     const { payload } = await jwtVerify(token, JWKS);
-
     req.user = payload;
-
     next();
   } catch (error) {
-    //console.log(error);
-
     return res.status(401).send({
       msg: "Unauthorized",
     });
   }
 };
 
-    //all task
+// =========================
+// All API Routes
+// =========================
+
+// Home Route
+app.get("/", (req, res) => {
+  res.send("SkillSwap server is running");
+});
 
 // All Tasks with Category Filter and Search
 app.get("/task", async (req, res) => {
-  const limit = Number(req.query.limit) || 8;
-  const page = Number(req.query.page) || 1;
+  try {
+    const limit = Number(req.query.limit) || 8;
+    const page = Number(req.query.page) || 1;
+    const searchText = req.query.search || "";
+    const category = req.query.category || "";
 
-  const searchText = req.query.search || "";
-  const category = req.query.category || "";
+    let query = {};
 
-  // Filter query
-  let query = {};
+    if (category && category !== "all") {
+      query.category = category;
+    }
 
-  // Category filter
-  if (category && category !== "all") {
-    query.category = category;
+    if (searchText) {
+      query.$or = [
+        { title: { $regex: searchText, $options: "i" } },
+        { details: { $regex: searchText, $options: "i" } },
+        { category: { $regex: searchText, $options: "i" } },
+      ];
+    }
+
+    const total_data = await taskCollection.countDocuments(query);
+    const total_page = Math.ceil(total_data / limit);
+    const skip = (page - 1) * limit;
+
+    const data = await taskCollection
+      .find(query)
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+    res.send({ total_page, skip, page, data });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch tasks",
+      error: error.message,
+    });
   }
-
-  // Search filter
-  if (searchText) {
-    query.$or = [
-      { title: { $regex: searchText, $options: "i" } },
-      { details: { $regex: searchText, $options: "i" } },
-      { category: { $regex: searchText, $options: "i" } },
-    ];
-  }
-
-  const total_data = await taskCollection.countDocuments(query);
-  const total_page = Math.ceil(total_data / limit);
-  const skip = (page - 1) * limit;
-
-  const data = await taskCollection
-    .find(query)
-    .skip(skip)
-    .limit(limit)
-    .toArray();
-
-  res.send({ total_page, skip, page, data });
 });
 
-
-
-
 // High price 8 tasks
-// app.get("/task/high-price", async (req, res) => {
-//   const result = await taskCollection
-//     .aggregate([
-//       {
-//         $addFields: {
-//           budgetNumber: {
-//             $toDouble: "$budget",
-//           },
-//         },
-//       },
-//       {
-//         $sort: {
-//           budgetNumber: -1,
-//         },
-//       },
-//       {
-//         $limit: 8,
-//       },
-//     ])
-//     .toArray();
-
-//   res.send(result);
-// });
 app.get("/task/high-price", async (req, res) => {
   try {
     const result = await taskCollection
@@ -167,8 +152,6 @@ app.get("/task/high-price", async (req, res) => {
 
     res.send(result);
   } catch (error) {
-    //console.log("High Price API Error:", error);
-
     res.status(500).send({
       message: "Failed to fetch high price tasks",
       error: error.message,
@@ -176,157 +159,207 @@ app.get("/task/high-price", async (req, res) => {
   }
 });
 
-
 // Single task
 app.get("/task/:id", async (req, res) => {
-  const result = await taskCollection.findOne({
-    _id: new ObjectId(req.params.id),
-  });
-
-  res.send(result);
-});
-
-
-
-// all freelancer
-   app.get("/freelancer", verifyToken, async (req, res) => {
-  const result = await freelancerCollection.find().toArray();
-
-  res.send(result);
-});
-
-
-
-
-
-
-   
-
-    // top freelancer
-    app.get("/freelancer/top-freelancers", async (req, res) => {
-    const result = await freelancerCollection
-    .find()
-    .sort({ rating: -1 })
-    .limit(4)
-    .toArray();
-
-  res.send(result);
-});
-
-
-// task post api 
-app.post("/task", async (req, res) => {
-  const task = req.body;
-
-  const newTask = {
-    ...task,
-    status: "open",
-  };
-
-  const result = await taskCollection.insertOne(newTask);
-
-  res.send(result);
-});
-
-
-// client based tasks
-app.get("/client-tasks/:userId", async (req, res) => {
-  const userId = req.params.userId;
-
-  const result = await taskCollection
-    .find({ client_id: userId })
-    .toArray();
-
-  res.send(result);
-});
-
-
-// edit task api
-
-app.patch("/task/:id", async (req, res) => {
-  const { id } = req.params;
-  const { title, category, budget, deadline, details } = req.body;
-
-  const updateData = {
-    title,
-    category,
-    budget,
-    deadline,
-    details,
-  };
-
-  const result = await taskCollection.updateOne(
-    {
-      _id: new ObjectId(id),
-      status: "open",
-    },
-    {
-      $set: updateData,
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid Task ID format" });
     }
-  );
-
-
-  
-  res.send(result);
+    const result = await taskCollection.findOne({
+      _id: new ObjectId(id),
+    });
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch task",
+      error: error.message,
+    });
+  }
 });
 
+// All freelancer
+app.get("/freelancer", verifyToken, async (req, res) => {
+  try {
+    const result = await freelancerCollection.find().toArray();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch freelancers",
+      error: error.message,
+    });
+  }
+});
+
+// Top freelancer
+app.get("/freelancer/top-freelancers", async (req, res) => {
+  try {
+    const result = await freelancerCollection
+      .find()
+      .sort({ rating: -1 })
+      .limit(4)
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch top freelancers",
+      error: error.message,
+    });
+  }
+});
+
+// Task post API
+app.post("/task", async (req, res) => {
+  try {
+    const task = req.body;
+    const newTask = {
+      ...task,
+      status: "open",
+    };
+    const result = await taskCollection.insertOne(newTask);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to create task",
+      error: error.message,
+    });
+  }
+});
+
+// Client based tasks
+app.get("/client-tasks/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const result = await taskCollection
+      .find({ client_id: userId })
+      .toArray();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch client tasks",
+      error: error.message,
+    });
+  }
+});
+
+// Edit task API
+app.patch("/task/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid Task ID format" });
+    }
+    const { title, category, budget, deadline, details } = req.body;
+
+    const updateData = {
+      title,
+      category,
+      budget,
+      deadline,
+      details,
+    };
+
+    const result = await taskCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+        status: "open",
+      },
+      {
+        $set: updateData,
+      }
+    );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to update task",
+      error: error.message,
+    });
+  }
+});
 
 // Delete Task API
-
 app.delete("/task/:id", async (req, res) => {
-  const { id } = req.params;
-
-  const result = await taskCollection.deleteOne({
-    _id: new ObjectId(id),
-  });
-
-  res.send(result);
-});
-
-
-
-//  apply for task
-app.patch("/task/:id/apply", async (req, res) => {
-  const { id } = req.params;
-  const { userId } = req.body;
-
-  const result = await taskCollection.updateOne(
-    { _id: new ObjectId(id) },
-    {
-      $push: {
-        applied_freelancers: userId,
-      },
-      $set: {
-        status: "in-process",
-      },
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid Task ID format" });
     }
-  );
+    const result = await taskCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
 
-  res.send(result);
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        deletedCount: 0,
+        message: "Task not found",
+      });
+    }
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to delete task",
+      error: error.message,
+    });
+  }
 });
 
+// Apply for task
+app.patch("/task/:id/apply", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid Task ID format" });
+    }
+    const { userId } = req.body;
 
-// my proposal task
+    const result = await taskCollection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $push: {
+          applied_freelancers: userId,
+        },
+        $set: {
+          status: "in-process",
+        },
+      }
+    );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to apply for task",
+      error: error.message,
+    });
+  }
+});
+
+// My proposal task
 app.get("/my-proposals/:userId", async (req, res) => {
-  const { userId } = req.params;
+  try {
+    const { userId } = req.params;
+    const result = await taskCollection
+      .find({
+        status: "in-process",
+        applied_freelancers: userId,
+      })
+      .toArray();
 
-  const result = await taskCollection
-    .find({
-      status: "in-process",
-      applied_freelancers: userId,
-    })
-    .toArray();
-    // console.log("Found Tasks:", result.length);
-
-  res.send(result);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch proposals",
+      error: error.message,
+    });
+  }
 });
-
 
 // Manage proposals
 app.get("/manage-proposals/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
-
     const result = await taskCollection
       .find({
         client_id: clientId,
@@ -336,16 +369,20 @@ app.get("/manage-proposals/:clientId", async (req, res) => {
 
     res.send(result);
   } catch (error) {
-    res.status(500).send({ message: "Failed to fetch proposals" });
+    res.status(500).send({
+      message: "Failed to fetch proposals",
+      error: error.message,
+    });
   }
 });
 
-
-//reject btn 
-
+// Reject proposal button
 app.patch("/task/:id/reject", async (req, res) => {
   try {
     const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid Task ID format" });
+    }
     const { freelancerId } = req.body;
 
     const result = await taskCollection.updateOne(
@@ -363,104 +400,73 @@ app.patch("/task/:id/reject", async (req, res) => {
   } catch (error) {
     res.status(500).send({
       message: "Failed to reject proposal",
+      error: error.message,
     });
   }
 });
 
-//active task 
+// Active tasks for freelancer
+app.get("/freelancer/active-projects/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await taskCollection
+      .find({
+        applied_freelancers: userId,
+        status: { $in: ["in-process", "completed"] },
+      })
+      .toArray();
 
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch active projects",
+      error: error.message,
+    });
+  }
+});
 
-      app.get("/freelancer/active-projects/:userId", async (req, res) => {
-        try {
-          const { userId } = req.params;
-
-          const result = await taskCollection
-            .find({
-              applied_freelancers: userId,
-              status: { $in: ["in-process", "completed"] },
-            })
-            .toArray();
-
-          res.send(result);
-        } catch (error) {
-          res.status(500).send({
-            message: "Failed to fetch active projects",
-          });
-        }
-      });
-
-
-
-
-      // client over view 
-      
+// Client overview
 app.get("/client-overview/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
 
-    // Find all tasks of this client
-    const tasks = await taskCollection.find({
-      client_id: clientId
-    }).toArray();
+    const tasks = await taskCollection
+      .find({ client_id: clientId })
+      .toArray();
 
-    // Total tasks
     const totalTasks = tasks.length;
+    const openTasks = tasks.filter((task) => task.status === "open").length;
+    const inProcessTasks = tasks.filter((task) => task.status === "in-process").length;
+    const completedTasks = tasks.filter((task) => task.status === "completed").length;
 
-    // Open tasks
-    const openTasks = tasks.filter(
-      task => task.status === "open"
-    ).length;
-
-    // In-process tasks
-    const inProcessTasks = tasks.filter(
-      task => task.status === "in-process"
-    ).length;
-
-    // Completed tasks
-    const completedTasks = tasks.filter(
-      task => task.status === "completed"
-    ).length;
-
-    // Total spent from completed tasks
     const totalSpent = tasks
-      .filter(task => task.status === "completed")
-      .reduce(
-        (total, task) => total + Number(task.budget || 0),
-        0
-      );
+      .filter((task) => task.status === "completed")
+      .reduce((total, task) => total + Number(task.budget || 0), 0);
 
-    // Send response
     res.send({
-     totalTasks,
-  openTasks,
-  inProcessTasks,
-  completedTasks,
-  totalSpent
+      totalTasks,
+      openTasks,
+      inProcessTasks,
+      completedTasks,
+      totalSpent,
     });
-
   } catch (error) {
     res.status(500).send({
       message: "Failed to load client overview",
-      error: error.message
+      error: error.message,
     });
   }
 });
 
-
-
-//freelancer overview
-
-
+// Freelancer overview
 app.get("/freelancer-overview/:freelancerId", async (req, res) => {
   try {
     const { freelancerId } = req.params;
 
-    // Total Proposals
     const proposals = await taskCollection
       .find({ applied_freelancers: freelancerId })
       .toArray();
 
-    // In Progress Tasks
     const inProgressTasks = await taskCollection
       .find({
         status: "in-process",
@@ -468,7 +474,6 @@ app.get("/freelancer-overview/:freelancerId", async (req, res) => {
       })
       .toArray();
 
-    // Completed Tasks
     const completedTasks = await taskCollection
       .find({
         status: "completed",
@@ -476,7 +481,6 @@ app.get("/freelancer-overview/:freelancerId", async (req, res) => {
       })
       .toArray();
 
-    // Total Earnings
     const totalEarnings = completedTasks.reduce(
       (total, task) => total + Number(task.budget || 0),
       0
@@ -496,23 +500,17 @@ app.get("/freelancer-overview/:freelancerId", async (req, res) => {
   }
 });
 
-
-// admin over view
+// Admin overview
 app.get("/admin-overview", async (req, res) => {
   try {
-    // Total Users
     const users = await userCollection.find().toArray();
-
-    // Total Tasks
     const tasks = await taskCollection.find().toArray();
 
-    // Total Revenue
     const totalRevenue = tasks.reduce(
       (total, task) => total + Number(task.budget || 0),
       0
     );
 
-    // Active Tasks
     const activeTasks = await taskCollection
       .find({
         status: { $in: ["open", "in-process"] },
@@ -533,9 +531,7 @@ app.get("/admin-overview", async (req, res) => {
   }
 });
 
-
-
-//user api admin 
+// Users API for admin
 app.get("/users", async (req, res) => {
   try {
     const users = await userCollection
@@ -551,17 +547,18 @@ app.get("/users", async (req, res) => {
   } catch (error) {
     res.status(500).send({
       message: "Failed to load users",
+      error: error.message,
     });
   }
 });
 
-
-//user delete from admin
-
+// User delete from admin
 app.delete("/user/:id", async (req, res) => {
   try {
     const { id } = req.params;
-
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid User ID format" });
+    }
     const result = await userCollection.deleteOne({
       _id: new ObjectId(id),
     });
@@ -578,13 +575,12 @@ app.delete("/user/:id", async (req, res) => {
   } catch (error) {
     res.status(500).send({
       message: "Failed to delete user",
+      error: error.message,
     });
   }
 });
 
-
-
-// Get All Tasks
+// Get all tasks for admin
 app.get("/tasks", async (req, res) => {
   try {
     const result = await taskCollection
@@ -596,58 +592,17 @@ app.get("/tasks", async (req, res) => {
   } catch (error) {
     res.status(500).send({
       message: "Failed to fetch tasks",
+      error: error.message,
     });
   }
 });
 
-// Delete Task
-app.delete("/task/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await taskCollection.deleteOne({
-      _id: new ObjectId(id),
-    });
-
-    if (result.deletedCount === 0) {
-      return res.status(404).send({
-        message: "Task not found",
-      });
-    }
-
-    res.send({
-      message: "Task deleted successfully",
-    });
-  } catch (error) {
-    res.status(500).send({
-      message: "Failed to delete task",
-    });
-
-    }
-});
-
-
-
- 
-
-  } catch (error) {
-    console.error("❌ MongoDB connection failed!");
-    console.error(error);
-  }
+// Start Server locally (do not run app.listen on Vercel)
+if (process.env.NODE_ENV !== "production") {
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
 }
 
-
-// Home Route
-app.get("/", (req, res) => {
-  res.send("server is running");
-});
-
-
-// Start Server
-app.listen(port, () => {
- // console.log(`Example app listening on port ${port}`);
-});
-
-
-// Connect MongoDB
-connectToMongoDB();
+// Export app for Vercel Serverless Functions
+module.exports = app;
