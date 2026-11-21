@@ -1,3 +1,4 @@
+
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
@@ -12,16 +13,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const port = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8000;
 
+// =========================
 // MongoDB Connection
+// =========================
+
 const uri = process.env.MONGLO_DB_URL;
+
 if (!uri) {
-  console.warn("⚠️ Warning: MONGLO_DB_URL is not defined in environment variables!");
+  throw new Error("MONGLO_DB_URL is missing in environment variables!");
 }
-const client = new MongoClient(uri || "mongodb://localhost:27017");
+
+const client = new MongoClient(uri);
 
 const db = client.db("skill-swap");
+
 const taskCollection = db.collection("task");
 const freelancerCollection = db.collection("freelancer");
 const userCollection = db.collection("user");
@@ -32,15 +39,22 @@ async function connectToMongoDB() {
     console.log("✅ MongoDB connected successfully!");
   } catch (error) {
     console.error("❌ MongoDB connection failed:", error.message);
+    throw error;
   }
 }
-connectToMongoDB();
 
+// =========================
 // JWT Setup
+// =========================
+
 const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+
 let JWKS;
+
 try {
-  JWKS = createRemoteJWKSet(new URL(`${clientUrl}/api/auth/jwks`));
+  JWKS = createRemoteJWKSet(
+    new URL(`${clientUrl}/api/auth/jwks`)
+  );
 } catch (error) {
   console.error("JWKS init error:", error.message);
 }
@@ -64,11 +78,18 @@ const verifyToken = async (req, res, next) => {
 
   try {
     if (!JWKS) {
-      const activeClientUrl = process.env.CLIENT_URL || "http://localhost:3000";
-      JWKS = createRemoteJWKSet(new URL(`${activeClientUrl}/api/auth/jwks`));
+      const activeClientUrl =
+        process.env.CLIENT_URL || "http://localhost:3000";
+
+      JWKS = createRemoteJWKSet(
+        new URL(`${activeClientUrl}/api/auth/jwks`)
+      );
     }
+
     const { payload } = await jwtVerify(token, JWKS);
+
     req.user = payload;
+
     next();
   } catch (error) {
     return res.status(401).send({
@@ -163,12 +184,17 @@ app.get("/task/high-price", async (req, res) => {
 app.get("/task/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ message: "Invalid Task ID format" });
+      return res.status(400).send({
+        message: "Invalid Task ID format",
+      });
     }
+
     const result = await taskCollection.findOne({
       _id: new ObjectId(id),
     });
+
     res.send(result);
   } catch (error) {
     res.status(500).send({
@@ -182,6 +208,7 @@ app.get("/task/:id", async (req, res) => {
 app.get("/freelancer", verifyToken, async (req, res) => {
   try {
     const result = await freelancerCollection.find().toArray();
+
     res.send(result);
   } catch (error) {
     res.status(500).send({
@@ -213,11 +240,14 @@ app.get("/freelancer/top-freelancers", async (req, res) => {
 app.post("/task", async (req, res) => {
   try {
     const task = req.body;
+
     const newTask = {
       ...task,
       status: "open",
     };
+
     const result = await taskCollection.insertOne(newTask);
+
     res.send(result);
   } catch (error) {
     res.status(500).send({
@@ -231,9 +261,11 @@ app.post("/task", async (req, res) => {
 app.get("/client-tasks/:userId", async (req, res) => {
   try {
     const userId = req.params.userId;
+
     const result = await taskCollection
       .find({ client_id: userId })
       .toArray();
+
     res.send(result);
   } catch (error) {
     res.status(500).send({
@@ -247,9 +279,13 @@ app.get("/client-tasks/:userId", async (req, res) => {
 app.patch("/task/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ message: "Invalid Task ID format" });
+      return res.status(400).send({
+        message: "Invalid Task ID format",
+      });
     }
+
     const { title, category, budget, deadline, details } = req.body;
 
     const updateData = {
@@ -283,9 +319,13 @@ app.patch("/task/:id", async (req, res) => {
 app.delete("/task/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ message: "Invalid Task ID format" });
+      return res.status(400).send({
+        message: "Invalid Task ID format",
+      });
     }
+
     const result = await taskCollection.deleteOne({
       _id: new ObjectId(id),
     });
@@ -310,9 +350,13 @@ app.delete("/task/:id", async (req, res) => {
 app.patch("/task/:id/apply", async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ message: "Invalid Task ID format" });
+      return res.status(400).send({
+        message: "Invalid Task ID format",
+      });
     }
+
     const { userId } = req.body;
 
     const result = await taskCollection.updateOne(
@@ -340,6 +384,7 @@ app.patch("/task/:id/apply", async (req, res) => {
 app.get("/my-proposals/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+
     const result = await taskCollection
       .find({
         status: "in-process",
@@ -360,6 +405,7 @@ app.get("/my-proposals/:userId", async (req, res) => {
 app.get("/manage-proposals/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
+
     const result = await taskCollection
       .find({
         client_id: clientId,
@@ -380,9 +426,13 @@ app.get("/manage-proposals/:clientId", async (req, res) => {
 app.patch("/task/:id/reject", async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ message: "Invalid Task ID format" });
+      return res.status(400).send({
+        message: "Invalid Task ID format",
+      });
     }
+
     const { freelancerId } = req.body;
 
     const result = await taskCollection.updateOne(
@@ -409,6 +459,7 @@ app.patch("/task/:id/reject", async (req, res) => {
 app.get("/freelancer/active-projects/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+
     const result = await taskCollection
       .find({
         applied_freelancers: userId,
@@ -435,13 +486,24 @@ app.get("/client-overview/:clientId", async (req, res) => {
       .toArray();
 
     const totalTasks = tasks.length;
-    const openTasks = tasks.filter((task) => task.status === "open").length;
-    const inProcessTasks = tasks.filter((task) => task.status === "in-process").length;
-    const completedTasks = tasks.filter((task) => task.status === "completed").length;
+    const openTasks = tasks.filter(
+      (task) => task.status === "open"
+    ).length;
+
+    const inProcessTasks = tasks.filter(
+      (task) => task.status === "in-process"
+    ).length;
+
+    const completedTasks = tasks.filter(
+      (task) => task.status === "completed"
+    ).length;
 
     const totalSpent = tasks
       .filter((task) => task.status === "completed")
-      .reduce((total, task) => total + Number(task.budget || 0), 0);
+      .reduce(
+        (total, task) => total + Number(task.budget || 0),
+        0
+      );
 
     res.send({
       totalTasks,
@@ -556,9 +618,13 @@ app.get("/users", async (req, res) => {
 app.delete("/user/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
     if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ message: "Invalid User ID format" });
+      return res.status(400).send({
+        message: "Invalid User ID format",
+      });
     }
+
     const result = await userCollection.deleteOne({
       _id: new ObjectId(id),
     });
@@ -597,12 +663,21 @@ app.get("/tasks", async (req, res) => {
   }
 });
 
-// Start Server locally (do not run app.listen on Vercel)
-if (process.env.NODE_ENV !== "production") {
-  app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-  });
+// =========================
+// Start Render Server
+// =========================
+
+async function startServer() {
+  try {
+    await connectToMongoDB();
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Server startup failed:", error.message);
+    process.exit(1);
+  }
 }
 
-// Export app for Vercel Serverless Functions
-module.exports = app;
+startServer();
